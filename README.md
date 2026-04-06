@@ -3,8 +3,11 @@ It allows you to perform a detailed analysis of your data after downloading it f
 
 The system automatically detects emulated games by scanning your 'General Notes'. For instance, if you enter 'PS2 / PC' in your 'General Notes' and mark it as 'emulated', the dashboard intelligently recognizes this and displays it as 'PlayStation 2 (Emu)'. This logic seamlessly applies to all other consoles (GBA, GC, Wii U, etc.), ensuring your emulation library is tracked with precision
 
-"PS1": "PlayStation 1"
+### To ensure your emulated games are displayed with the (Emu) tag in the dashboard, follow this syntax in your "General Notes" field on HowLongToBeat :
+[Original Console] / [Target Platform]
 
+```text
+"PS1": "PlayStation 1"
 "PS2": "PlayStation 2"
 "PS3": "PlayStation 3"
 "PS4": "PlayStation 4"
@@ -36,5 +39,4 @@ The system automatically detects emulated games by scanning your 'General Notes'
 "MD": "Mega Drive"
 "PC": "PC"
 "DOS": "MS-DOS"
-
 This project was generated using AI tools with minimal manual intervention.
