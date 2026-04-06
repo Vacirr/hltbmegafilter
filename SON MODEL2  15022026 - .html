@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLTB Ultimate V19 - Multi Select & Replay</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0d0d0d;
+            --card-bg: #161616;
+            --accent: #bb86fc;
+            --accent-hover: #9965f4;
+            --secondary: #03dac6;
+            --text-main: #e0e0e0;
+            --text-muted: #888;
+            --border: #333;
+            --success: #00e676;
+            --warning: #ffea00;
+            --danger: #ff1744;
+            --info: #2979ff;
+            --orange: #ff9100;
+            --grey: #9e9e9e;
+            --replay: #00b0ff; /* Replay için özel renk */
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg-color); }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+        h1 {
+            text-align: center; color: var(--accent); text-transform: uppercase; letter-spacing: 3px; 
+            margin: 20px 0 30px; font-size: 2.2rem; text-shadow: 0 0 20px rgba(187, 134, 252, 0.3);
+        }
+
+        /* Upload Area */
+        .upload-wrapper { display: flex; justify-content: center; margin-bottom: 40px; }
+        #dropZone {
+            border: 2px dashed var(--accent); border-radius: 16px; padding: 60px;
+            width: 100%; max-width: 800px; text-align: center;
+            background: linear-gradient(145deg, #1a1a1a, #101010); cursor: pointer; transition: 0.3s;
+        }
+        #dropZone:hover { transform: translateY(-5px); border-color: var(--secondary); box-shadow: 0 10px 30px rgba(3, 218, 198, 0.15); }
+        #dropZone i { font-size: 3.5rem; color: var(--accent); margin-bottom: 20px; }
+
+        /* Dashboard */
+        .dashboard { display: none; max-width: 1600px; margin: 0 auto; animation: fadeIn 0.6s ease-out; }
+
+        /* Filter Controls */
+        .filter-controls {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(187, 134, 252, 0.05); border: 1px solid var(--border);
+            padding: 20px; border-radius: 12px; margin-bottom: 30px; flex-wrap: wrap; gap: 20px;
+        }
+        .filter-left { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; flex: 1; }
+        .filter-info { font-size: 1rem; color: #aaa; margin-right: 15px; display:flex; align-items:center; gap:10px; }
+        .active-filters-list { display: inline-flex; gap: 10px; flex-wrap: wrap; }
+        .filter-tag { 
+            background: var(--accent); color: #000; padding: 5px 12px; 
+            border-radius: 20px; font-weight: bold; font-size: 0.85rem; 
+            display: flex; align-items: center; gap: 6px;
+        }
+        .filter-tag i { cursor: pointer; opacity: 0.7; }
+        .filter-tag i:hover { opacity: 1; }
+
+        /* Status Buttons Group */
+        .status-btn-group { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .btn-status {
+            background: transparent; border: 1px solid #444; color: #888;
+            padding: 8px 16px; border-radius: 20px; cursor: pointer; font-weight: 600; font-size: 0.9rem;
+            display: flex; align-items: center; gap: 8px; transition: 0.2s; user-select: none;
+        }
+        .btn-status:hover { transform: translateY(-2px); border-color: #666; color: #ccc; }
+        
+        /* Active States for Status Buttons */
+        .btn-status.active-comp { background: rgba(0, 230, 118, 0.2); color: var(--success); border-color: var(--success); box-shadow: 0 0 10px rgba(0,230,118,0.2); }
+        .btn-status.active-ret { background: rgba(255, 23, 68, 0.2); color: var(--danger); border-color: var(--danger); box-shadow: 0 0 10px rgba(255,23,68,0.2); }
+        .btn-status.active-play { background: rgba(255, 145, 0, 0.2); color: var(--orange); border-color: var(--orange); box-shadow: 0 0 10px rgba(255,145,0,0.2); }
+        .btn-status.active-back { background: rgba(158, 158, 158, 0.2); color: var(--grey); border-color: var(--grey); box-shadow: 0 0 10px rgba(158,158,158,0.2); }
+        
+        /* Replay Button Style */
+        .btn-replay { border-color: var(--replay); color: var(--replay); opacity: 0.6; }
+        .btn-replay:hover { opacity: 1; }
+        .btn-replay.active-replay { background: rgba(0, 176, 255, 0.2); opacity: 1; box-shadow: 0 0 10px rgba(0, 176, 255, 0.2); color: #fff; }
+
+        .divider-v { width: 1px; height: 30px; background: #333; margin: 0 10px; }
+
+        /* KPI Cards */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .kpi-card {
+            background: var(--card-bg); padding: 25px; border-radius: 12px; text-align: center;
+            border: 1px solid var(--border); box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: 0.3s;
+        }
+        .kpi-val { font-size: 3rem; font-weight: 800; color: #fff; line-height: 1.1; }
+        .kpi-lbl { font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; margin-top: 5px; }
+        .kpi-sub { font-size: 0.9rem; color: #888; margin-top: 5px; font-family: monospace;}
+
+        /* Charts Area */
+        .charts-container { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 40px; }
+        .chart-box {
+            background: var(--card-bg); padding: 20px; border-radius: 12px; border: 1px solid var(--border);
+            min-height: 400px;
+        }
+        .full-width { grid-column: 1 / -1; }
+        @media (max-width: 1000px) { .charts-container { grid-template-columns: 1fr; } }
+
+        /* Tables Container */
+        .tables-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px; }
+        @media (max-width: 1200px) { .tables-grid { grid-template-columns: 1fr; } }
+
+        .section-box {
+            background: var(--card-bg); border-radius: 12px; padding: 25px;
+            margin-bottom: 0; border: 1px solid var(--border); box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+            height: 100%; display: flex; flex-direction: column;
+        }
+        
+        .box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 15px; }
+        .box-title { font-size: 1.4rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .box-title i { color: var(--secondary); }
+
+        /* Modern Table & Interactions */
+        .modern-table { width: 100%; border-collapse: separate; border-spacing: 0; flex-grow: 1; }
+        .modern-table th {
+            text-align: left; padding: 15px; color: var(--text-muted); font-size: 0.85rem;
+            text-transform: uppercase; letter-spacing: 1px; cursor: pointer; border-bottom: 2px solid var(--border); user-select: none;
+        }
+        .modern-table td { padding: 12px 15px; border-bottom: 1px solid #222; color: #ddd; transition: 0.2s; }
+        
+        /* Interactive Rows */
+        .interactive-rows tr { cursor: pointer; transition: 0.1s all; }
+        .interactive-rows tr:hover td { background: rgba(255,255,255,0.05); color: #fff; }
+        
+        /* SELECTED ROW STYLE */
+        .interactive-rows tr.selected-row td {
+            background: var(--accent) !important;
+            color: #000 !important;
+            font-weight: bold;
+        }
+        .interactive-rows tr.selected-row .stat-val, 
+        .interactive-rows tr.selected-row .plat-name { color: #000 !important; }
+        .interactive-rows tr.selected-row .bar-bg { background: rgba(0,0,0,0.3) !important; }
+        .interactive-rows tr.selected-row .bar-fill { background: #000 !important; }
+
+        /* Bar & Badges */
+        .stat-flex { display: flex; align-items: center; gap: 12px; }
+        .stat-val { font-family: 'Consolas', monospace; font-weight: bold; width: 45px; text-align: right; font-size: 1.1rem; }
+        .bar-bg { flex-grow: 1; height: 6px; background: #333; border-radius: 3px; max-width: 120px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 3px; }
+        .plat-name { font-weight: 700; color: #fff; font-size: 1rem; }
+
+        /* Status Badges */
+        .badge { padding: 4px 10px; border-radius: 10px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; }
+        .b-comp { background: rgba(0,230,118,0.15); color: var(--success); }
+        .b-ret { background: rgba(255,23,68,0.15); color: var(--danger); }
+        .b-play { background: rgba(255,145,0,0.15); color: var(--orange); }
+        .b-back { background: rgba(158,158,158,0.15); color: var(--grey); }
+        .b-none { opacity: 0.3; }
+        
+        .replay-tag {
+            font-size: 0.7rem; color: var(--replay); border: 1px solid var(--replay);
+            padding: 1px 6px; border-radius: 8px; margin-left: 5px; font-weight: bold;
+        }
+
+        /* Buttons */
+        .btn {
+            background: transparent; border: 1px solid var(--border); color: var(--text-muted);
+            padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; 
+            display: flex; align-items: center; gap: 8px; transition: 0.2s;
+        }
+        .btn:hover { border-color: #fff; color: #fff; }
+        .btn-red:hover { border-color: var(--danger); color: var(--danger); }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <h1><i class="fas fa-chart-line"></i> HLTB Ultimate V19</h1>
+
+    <div class="upload-wrapper">
+        <div id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <i class="fas fa-file-csv"></i>
+            <p>CSV Dosyasını Buraya Fırlat</p>
+            <input type="file" id="fileInput" accept=".csv" style="display:none" onchange="handleFile(this.files)">
+        </div>
+    </div>
+
+    <div class="dashboard" id="mainDashboard">
+        
+        <div class="filter-controls">
+            <div class="filter-left">
+                <div class="filter-info">
+                    <i class="fas fa-filter"></i>
+                    <span id="activeFiltersList" class="active-filters-list">
+                        <span style="opacity:0.5; font-size:0.9rem;">(Hiçbiri seçili değil)</span>
+                    </span>
+                </div>
+                
+                <div class="status-btn-group">
+                    <button id="btnComp" class="btn-status" onclick="toggleStatus('comp')">
+                        <i class="fas fa-check-circle"></i> Bitirilenler
+                    </button>
+                    <button id="btnRet" class="btn-status" onclick="toggleStatus('ret')">
+                        <i class="fas fa-times-circle"></i> Bırakılanlar
+                    </button>
+                    <button id="btnPlay" class="btn-status" onclick="toggleStatus('play')">
+                        <i class="fas fa-gamepad"></i> Oynanıyor
+                    </button>
+                    <button id="btnBack" class="btn-status" onclick="toggleStatus('back')">
+                        <i class="fas fa-box-open"></i> Backlog
+                    </button>
+                    
+                    <div class="divider-v"></div>
+
+                    <button id="btnReplay" class="btn-status btn-replay" onclick="toggleReplay()">
+                        <i class="fas fa-sync-alt"></i> Replay
+                    </button>
+                </div>
+            </div>
+
+            <button class="btn btn-red" onclick="resetFilters()">
+                <i class="fas fa-trash"></i> Temizle
+            </button>
+        </div>
+
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-val" id="kpiTotal">0</div>
+                <div class="kpi-lbl">Seçilen Oyun</div>
+            </div>
+            <div class="kpi-card" style="border-bottom: 2px solid var(--success);">
+                <div class="kpi-val" id="kpiComp" style="color:var(--success)">0</div>
+                <div class="kpi-lbl">Bitirilen</div>
+            </div>
+            <div class="kpi-card" style="border-bottom: 2px solid var(--accent);">
+                <div class="kpi-val" id="kpiPlat" style="color:var(--accent)">0</div>
+                <div class="kpi-lbl">Platform</div>
+            </div>
+            <div class="kpi-card" style="border-bottom: 2px solid var(--info);">
+                <div class="kpi-val" id="kpiTime" style="color:var(--info)">0</div>
+                <div class="kpi-lbl">Toplam Saat</div>
+                <div class="kpi-sub" id="kpiTimeDetail"></div>
+            </div>
+        </div>
+
+        <div class="charts-container">
+            <div class="chart-box full-width">
+                <canvas id="timeChart"></canvas>
+            </div>
+            <div class="chart-box">
+                <canvas id="storeChart"></canvas>
+            </div>
+            <div class="chart-box">
+                <canvas id="platformChart"></canvas>
+            </div>
+        </div>
+
+        <div class="tables-grid">
+            <div class="section-box">
+                <div class="box-header">
+                    <div class="box-title"><i class="fas fa-calendar-alt"></i> Yıl Filtresi</div>
+                    <small style="color:#666">Yıla tıklayıp detayları gör</small>
+                </div>
+                <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
+                    <table class="modern-table interactive-rows" id="yearsTable">
+                        <thead>
+                            <tr>
+                                <th onclick="sortYears(0)">Yıl</th>
+                                <th onclick="sortYears(1)">Sayı</th>
+                                <th onclick="sortYears(2)">Süre (Saat)</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="section-box">
+                 <div class="box-header">
+                    <div class="box-title"><i class="fas fa-layer-group"></i> Platform Filtresi</div>
+                    <small style="color:#666">Filtrelemek için tıkla</small>
+                </div>
+                <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
+                    <table class="modern-table interactive-rows" id="unifiedTable">
+                        <thead>
+                            <tr>
+                                <th onclick="sortUnified(0)">Platform</th>
+                                <th onclick="sortUnified(1)">Sayı</th>
+                                <th>Durum</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="listSection" class="section-box" style="display:block;">
+            <div class="box-header">
+                <div class="box-title" id="listTitle"><i class="fas fa-list"></i> Filtrelenmiş Oyun Listesi</div>
+                <div style="font-size: 0.9rem; color: var(--accent);" id="listCount">0 Oyun</div>
+            </div>
+            <div style="overflow-x: auto;">
+                <table class="modern-table" id="gamesTable">
+                    <thead>
+                        <tr>
+                            <th onclick="sortGames('title')">Oyun Adı <i class="fas fa-sort"></i></th>
+                            <th onclick="sortGames('plat')">Platform <i class="fas fa-sort"></i></th>
+                            <th onclick="sortGames('score')">Puan <i class="fas fa-sort"></i></th>
+                            <th onclick="sortGames('time')">Süre <i class="fas fa-sort"></i></th>
+                            <th onclick="sortGames('status')">Durum <i class="fas fa-sort"></i></th>
+                            <th onclick="sortGames('date')">Tarih <i class="fas fa-sort"></i></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // GLOBAL VARIABLES
+        let rawData = [];
+        // statuses is now an array for multi-select
+        let activeFilters = { year: null, plat: null, statuses: [], replay: false }; 
+        
+        let unifiedData = []; 
+        let yearsData = [];   
+        let currentSort = { col: 'count', dir: 'desc' };
+        let currentYearSort = { col: 'name', dir: 'desc' };
+        let gameListSort = { col: 'date', dir: 'desc' };
+        
+        // Chart instances
+        let chartInstances = { time: null, store: null, plat: null };
+        const TR_MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+
+        const consoleMap = {
+            "PS1": "PlayStation 1", "PS2": "PlayStation 2", "PS3": "PlayStation 3",
+            "PS4": "PlayStation 4", "PS5": "PlayStation 5", "PSP": "PlayStation Portable",
+            "PSV": "PlayStation Vita", "GBA": "Game Boy Advance", "NDS": "Nintendo DS",
+            "DS": "Nintendo DS", "3DS": "Nintendo 3DS", "NES": "NES", 
+            "SNES": "Super Nintendo", "N64": "Nintendo 64", "GC": "GameCube", "NGC": "GameCube", 
+            "Wii": "Wii", "WiiU": "Wii U", "Switch": "Nintendo Switch", "NS": "Nintendo Switch", 
+            "GB": "Game Boy", "GBC": "Game Boy Color",
+            "X360": "Xbox 360", "Xbox": "Xbox Original", "XB1": "Xbox One", "XSX": "Xbox Series X/S",
+            "SS": "Sega Saturn", "DC": "Dreamcast", "GEN": "Sega Genesis", "MD": "Mega Drive",
+            "PC": "PC", "DOS": "MS-DOS"
+        };
+
+        // --- CSV PARSER ---
+        function parseCSV(text) {
+            const rows = [];
+            let currentRow = [];
+            let currentCell = "";
+            let inQuote = false;
+            text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                const next = text[i+1];
+                if (char === '"') {
+                    if (inQuote && next === '"') { currentCell += '"'; i++; } else { inQuote = !inQuote; }
+                } else if (char === ',' && !inQuote) {
+                    currentRow.push(currentCell); currentCell = "";
+                } else if (char === '\n' && !inQuote) {
+                    currentRow.push(currentCell); rows.push(currentRow); currentRow = []; currentCell = "";
+                } else { currentCell += char; }
+            }
+            if(currentCell || currentRow.length) { currentRow.push(currentCell); rows.push(currentRow); }
+            const cleanRows = rows.filter(r => r.length > 1 || (r.length===1 && r[0]!==''));
+            if(cleanRows.length === 0) return [];
+            const headers = cleanRows[0].map(h => h.trim().replace(/^\ufeff/, ''));
+            return cleanRows.slice(1).map(row => {
+                let obj = {}; headers.forEach((h, idx) => obj[h] = row[idx] || ""); return obj;
+            });
+        }
+
+        const parseTime = (s) => { if(!s||s==='--')return 0; const p=s.split(':'); return (parseInt(p[0])||0)*60+(parseInt(p[1])||0); };
+        const formatTime = (m) => { if(!m)return '-'; return `${Math.floor(m/60)}s ${m%60}dk`; };
+        const getDur = (g) => Math.max(parseTime(g['Main Story']), parseTime(g['Progress']), parseTime(g['Main + Extras']), parseTime(g['Completionist']));
+        const getScore = (g) => parseInt(g['Review'])||0;
+        const getYear = (g) => { 
+            let d = g['Completion Date'] || g['Added']; 
+            if(d && d.match(/\d{4}/)) return d.match(/\d{4}/)[0];
+            return "Tarihsiz"; 
+        };
+        const getMonthIndex = (g) => {
+            let d = g['Completion Date'] || g['Added'];
+            if(!d) return null;
+            let m = d.match(/[-/.](\d{2})[-/.]/); 
+            if(m) return parseInt(m[1]) - 1;
+            return null;
+        };
+        const resolvePlat = (g) => {
+            let p = (g['Platform']||"").trim();
+            let n = (g['General Notes']||"").toLowerCase();
+            if (n.includes('emulated') || p.toLowerCase() === 'emulated') {
+                let parts = (g['General Notes'] || "").split('/');
+                let rawPlat = parts[0].trim();
+                let fullName = consoleMap[rawPlat] || consoleMap[p] || rawPlat || p || "Emulated";
+                return fullName + " (Emu)";
+            }
+            if (n.includes('backwards') || n.includes('bc')) return (consoleMap[p] || p) + " (BC)";
+            return consoleMap[p] || p || "Diğer";
+        };
+
+        const handleFile = (files) => {
+            if(!files.length) return;
+            const r = new FileReader();
+            r.onload = (e) => {
+                try {
+                    rawData = parseCSV(e.target.result);
+                    if(!rawData.length) throw new Error("Veri yok");
+                    rawData.forEach(g => {
+                        g._dur = getDur(g);
+                        g._score = getScore(g);
+                        g._plat = resolvePlat(g);
+                        g._year = getYear(g);
+                        g._monthIdx = getMonthIndex(g);
+                        g._replay = !!(g['Replay']); // Check if Replay column has content
+                    });
+                    updateDashboard();
+                    document.getElementById('mainDashboard').style.display = 'block';
+                    document.querySelector('.upload-wrapper').style.display = 'none';
+                } catch(err) { alert("Hata: " + err); }
+            };
+            r.readAsText(files[0]);
+        };
+
+        // --- LOGIC ---
+        const toggleFilter = (type, val) => {
+            if(activeFilters[type] === val) activeFilters[type] = null;
+            else activeFilters[type] = val;
+            updateDashboard();
+        };
+
+        const toggleStatus = (st) => {
+            const idx = activeFilters.statuses.indexOf(st);
+            if(idx > -1) {
+                // Remove if exists
+                activeFilters.statuses.splice(idx, 1);
+            } else {
+                // Add if not exists
+                activeFilters.statuses.push(st);
+            }
+            updateDashboard();
+        };
+
+        const toggleReplay = () => {
+            activeFilters.replay = !activeFilters.replay;
+            updateDashboard();
+        }
+
+        const resetFilters = () => {
+            activeFilters = { year: null, plat: null, statuses: [], replay: false };
+            updateDashboard();
+        };
+
+        const updateDashboard = () => {
+            // A. Filter Raw Data
+            let filteredData = rawData.filter(g => {
+                let matchYear = activeFilters.year ? g._year === activeFilters.year : true;
+                let matchPlat = activeFilters.plat ? g._plat === activeFilters.plat : true;
+                
+                // Multi-select Status Logic (OR Logic between statuses)
+                let matchStatus = true;
+                if (activeFilters.statuses.length > 0) {
+                    matchStatus = false; // Default false if filters exist
+                    if(activeFilters.statuses.includes('comp') && g['Completed']) matchStatus = true;
+                    if(activeFilters.statuses.includes('ret') && g['Retired']) matchStatus = true;
+                    if(activeFilters.statuses.includes('play') && g['Playing']) matchStatus = true;
+                    if(activeFilters.statuses.includes('back') && g['Backlog']) matchStatus = true;
+                }
+                
+                // Replay Filter (AND Logic)
+                let matchReplay = activeFilters.replay ? g._replay : true;
+
+                return matchYear && matchPlat && matchStatus && matchReplay;
+            });
+
+            // B. Update Filter Tags & Button State
+            const tagContainer = document.getElementById('activeFiltersList');
+            const btns = {
+                comp: document.getElementById('btnComp'),
+                ret: document.getElementById('btnRet'),
+                play: document.getElementById('btnPlay'),
+                back: document.getElementById('btnBack')
+            };
+            const btnReplay = document.getElementById('btnReplay');
+
+            // Reset buttons visual
+            Object.values(btns).forEach(b => b.className = 'btn-status');
+            
+            // Set active classes for selected statuses
+            activeFilters.statuses.forEach(s => {
+                if(btns[s]) btns[s].classList.add(`active-${s}`);
+            });
+
+            // Replay Button Visual
+            btnReplay.className = activeFilters.replay ? 'btn-status btn-replay active-replay' : 'btn-status btn-replay';
+
+            tagContainer.innerHTML = '';
+            let hasFilter = false;
+
+            if(activeFilters.year) {
+                tagContainer.innerHTML += `<div class="filter-tag">${activeFilters.year} <i class="fas fa-times" onclick="toggleFilter('year', '${activeFilters.year}')"></i></div>`;
+                hasFilter = true;
+            }
+            if(activeFilters.plat) {
+                tagContainer.innerHTML += `<div class="filter-tag">${activeFilters.plat} <i class="fas fa-times" onclick="toggleFilter('plat', '${activeFilters.plat}')"></i></div>`;
+                hasFilter = true;
+            }
+
+            if(!hasFilter && activeFilters.statuses.length === 0 && !activeFilters.replay) {
+                tagContainer.innerHTML = '<span style="opacity:0.5; font-size:0.9rem;">(Hiçbiri seçili değil)</span>';
+            }
+
+            // C. Calculate Stats
+            let stats = { 
+                total: filteredData.length, comp: 0, time: 0, 
+                plats: {}, years: {}, stores: {}, 
+                months: Array(12).fill(0),
+                monthsTime: Array(12).fill(0)
+            };
+            
+            filteredData.forEach(g => {
+                if(g['Completed']) stats.comp++;
+                if(g._dur>0) stats.time+=g._dur;
+                
+                // Platforms
+                let p = g._plat;
+                if(!stats.plats[p]) stats.plats[p] = { count:0, sSum:0, sCnt:0 };
+                stats.plats[p].count++;
+                if(g._score>0){ stats.plats[p].sSum+=g._score; stats.plats[p].sCnt++; }
+
+                // Years
+                let y = g._year;
+                if(!stats.years[y]) stats.years[y] = { count:0, sSum:0, sCnt:0, time:0 };
+                stats.years[y].count++;
+                if(g._dur>0) stats.years[y].time += g._dur;
+                if(g._score>0){ stats.years[y].sSum+=g._score; stats.years[y].sCnt++; }
+
+                // Months
+                if(g._monthIdx !== null && g._monthIdx >= 0 && g._monthIdx < 12) {
+                    stats.months[g._monthIdx]++;
+                    if(g._dur>0) stats.monthsTime[g._monthIdx] += g._dur;
+                }
+
+                let st = g['Storefront']; if(st) stats.stores[st] = (stats.stores[st]||0)+1;
+            });
+
+            // D. UI Updates
+            document.getElementById('kpiTotal').innerText = stats.total;
+            document.getElementById('kpiComp').innerText = stats.comp; 
+            document.getElementById('kpiPlat').innerText = Object.keys(stats.plats).length;
+            
+            let totalHours = Math.floor(stats.time/60);
+            document.getElementById('kpiTime').innerText = totalHours;
+            document.getElementById('kpiTimeDetail').innerText = `${stats.time} Dakika`;
+
+            // Prepare Data for Tables
+            unifiedData = Object.entries(stats.plats).map(([k,v]) => ({
+                name: k, count: v.count, avgScore: v.sCnt ? v.sSum/v.sCnt : 0
+            }));
+            
+            yearsData = Object.entries(stats.years).map(([k,v]) => ({
+                name: k, count: v.count, avgScore: v.sCnt ? v.sSum/v.sCnt : 0, time: v.time
+            }));
+
+            renderUnifiedTable();
+            renderYearsTable();
+            renderCharts(stats);
+            renderGamesList(filteredData);
+        };
+
+        // --- RENDERERS ---
+        const renderUnifiedTable = () => {
+            unifiedData.sort((a,b) => {
+                let vA = a[currentSort.col], vB = b[currentSort.col];
+                if(typeof vA === 'string') return currentSort.dir==='asc' ? vA.localeCompare(vB) : vB.localeCompare(vA);
+                return currentSort.dir==='asc' ? vA-vB : vB-vA;
+            });
+            const tbody = document.querySelector('#unifiedTable tbody');
+            tbody.innerHTML = '';
+            const maxC = Math.max(...unifiedData.map(d=>d.count))||1;
+            unifiedData.forEach(d => {
+                const tr = document.createElement('tr');
+                if(activeFilters.plat === d.name) tr.classList.add('selected-row');
+                tr.onclick = () => toggleFilter('plat', d.name);
+                let wC = (d.count/maxC)*100;
+                tr.innerHTML = `
+                    <td><div class="plat-name">${d.name}</div></td>
+                    <td>
+                        <div class="stat-flex">
+                            <span class="stat-val" style="color:var(--secondary)">${d.count}</span>
+                            <div class="bar-bg"><div class="bar-fill" style="width:${wC}%; background:var(--secondary)"></div></div>
+                        </div>
+                    </td>
+                    <td style="font-weight:bold; color:#888;">${d.avgScore > 0 ? d.avgScore.toFixed(0) : '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        };
+
+        const renderYearsTable = () => {
+            yearsData.sort((a,b) => {
+                let vA = a[currentYearSort.col], vB = b[currentYearSort.col];
+                if(currentYearSort.col === 'name') return currentYearSort.dir==='asc' ? vA.localeCompare(vB) : vB.localeCompare(vA);
+                return currentYearSort.dir==='asc' ? vA-vB : vB-vA;
+            });
+            const tbody = document.querySelector('#yearsTable tbody');
+            tbody.innerHTML = '';
+            const maxC = Math.max(...yearsData.map(d=>d.count))||1;
+            yearsData.forEach(d => {
+                const tr = document.createElement('tr');
+                if(activeFilters.year === d.name) tr.classList.add('selected-row');
+                tr.onclick = () => toggleFilter('year', d.name);
+                let wC = (d.count/maxC)*100;
+                let hrs = Math.floor(d.time/60);
+                tr.innerHTML = `
+                    <td><div class="plat-name" style="color:var(--accent)">${d.name}</div></td>
+                    <td>
+                        <div class="stat-flex">
+                            <span class="stat-val" style="color:var(--info)">${d.count}</span>
+                            <div class="bar-bg"><div class="bar-fill" style="width:${wC}%; background:var(--info)"></div></div>
+                        </div>
+                    </td>
+                    <td style="font-family:monospace; color:#fff; font-weight:bold;">${hrs} Sa</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        };
+
+        const renderCharts = (stats) => {
+            Chart.defaults.color = '#888';
+            Chart.defaults.borderColor = '#333';
+            const destroy = (key) => { if(chartInstances[key]) chartInstances[key].destroy(); };
+
+            // --- DYNAMIC TIME CHART ---
+            destroy('time');
+            let timeLabels, countData, durationData, timeTitle;
+
+            if (activeFilters.year) {
+                // Monthly View
+                timeLabels = TR_MONTHS;
+                countData = stats.months; 
+                durationData = stats.monthsTime.map(m => (m/60).toFixed(1)); 
+                timeTitle = `${activeFilters.year} - Aylık Analiz`;
+            } else {
+                // Yearly View (Default)
+                timeLabels = Object.keys(stats.years).sort();
+                countData = timeLabels.map(y => stats.years[y].count);
+                durationData = timeLabels.map(y => (stats.years[y].time/60).toFixed(1));
+                timeTitle = 'Yıllara Göre Genel Aktivite';
+            }
+
+            chartInstances.time = new Chart(document.getElementById('timeChart'), {
+                type: 'bar',
+                data: {
+                    labels: timeLabels,
+                    datasets: [
+                        { 
+                            label: 'Oyun Sayısı', 
+                            data: countData, 
+                            type: 'line',
+                            borderColor: '#03dac6', 
+                            backgroundColor: 'rgba(3, 218, 198, 0.1)', 
+                            yAxisID: 'y',
+                            tension: 0.3,
+                            borderWidth: 3
+                        },
+                        {
+                            label: 'Oynama Süresi (Saat)',
+                            data: durationData,
+                            type: 'bar',
+                            backgroundColor: 'rgba(187,134,252,0.6)',
+                            yAxisID: 'y1',
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { 
+                        title: { display: true, text: timeTitle, font: { size: 16 } },
+                        tooltip: { 
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) { label += ': '; }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y;
+                                        if(context.dataset.yAxisID === 'y1') label += ' Saat';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { 
+                            type: 'linear', display: true, position: 'left', 
+                            title: {display:true, text:'Oyun Adedi'},
+                            grid: { color: '#333' }
+                        },
+                        y1: {
+                            type: 'linear', display: true, position: 'right',
+                            title: {display:true, text:'Saat'},
+                            grid: { drawOnChartArea: false } 
+                        }
+                    }
+                }
+            });
+
+            // Stores
+            destroy('store');
+            const sLabels = Object.keys(stats.stores).sort((a,b)=>stats.stores[b]-stats.stores[a]).slice(0,6);
+            chartInstances.store = new Chart(document.getElementById('storeChart'), {
+                type: 'doughnut',
+                data: { labels: sLabels, datasets: [{ data: sLabels.map(s=>stats.stores[s]), backgroundColor:['#03dac6','#ff4081','#2979ff','#ffea00','#00e676','#651fff'], borderWidth:0 }] },
+                options: { responsive:true, maintainAspectRatio:false, plugins:{title:{display:true, text:'Mağaza'}} }
+            });
+
+            // Platform
+            destroy('plat');
+            const pLabels = Object.keys(stats.plats).sort((a,b)=>stats.plats[b].count - stats.plats[a].count).slice(0,10);
+            chartInstances.plat = new Chart(document.getElementById('platformChart'), {
+                type: 'bar',
+                data: { labels: pLabels, datasets: [{ label:'Sayı', data: pLabels.map(p=>stats.plats[p].count), backgroundColor:'#bb86fc', borderRadius:4 }] },
+                options: { responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{legend:{display:false}, title:{display:true, text:'Top 10 Platform'}} }
+            });
+        };
+
+        const renderGamesList = (list) => {
+            list.sort((a,b) => {
+                let vA, vB, k = gameListSort.col;
+                if(k==='title') { vA=a['Title'].toLowerCase(); vB=b['Title'].toLowerCase(); }
+                else if(k==='plat') { vA=a._plat.toLowerCase(); vB=b._plat.toLowerCase(); }
+                else if(k==='score') { vA=a._score; vB=b._score; }
+                else if(k==='time') { vA=a._dur; vB=b._dur; }
+                else if(k==='date') { vA=a['Completion Date']||""; vB=b['Completion Date']||""; }
+                else if(k==='status') { 
+                    const getStatVal = (x) => {
+                        if(x['Completed']) return 1;
+                        if(x['Playing']) return 2;
+                        if(x['Backlog']) return 3;
+                        if(x['Retired']) return 4;
+                        return 5;
+                    };
+                    vA = getStatVal(a); vB = getStatVal(b);
+                }
+                if(vA < vB) return gameListSort.dir==='asc' ? -1 : 1;
+                if(vA > vB) return gameListSort.dir==='asc' ? 1 : -1;
+                return 0;
+            });
+
+            const tbody = document.querySelector('#gamesTable tbody');
+            tbody.innerHTML = '';
+            const displayList = list.slice(0, 300); 
+
+            displayList.forEach(g => {
+                const tr = document.createElement('tr');
+                let st = '<span class="badge b-none">-</span>';
+                if(g['Completed']) st = '<span class="badge b-comp">Bitti</span>';
+                else if(g['Retired']) st = '<span class="badge b-ret">Bırakıldı</span>';
+                else if(g['Playing']) st = '<span class="badge b-play">Oynanıyor</span>';
+                else if(g['Backlog']) st = '<span class="badge b-back">Backlog</span>';
+                
+                // Replay Badge next to status
+                if(g._replay) {
+                    st += '<span class="replay-tag"><i class="fas fa-sync-alt"></i> Tekrar</span>';
+                }
+                
+                let sCol = g._score>=80?'var(--success)':(g._score>0?'var(--warning)':'#555');
+                tr.innerHTML = `
+                    <td style="font-weight:600; color:#fff">${g['Title']}</td>
+                    <td style="color:#999">${g._plat}</td>
+                    <td style="font-weight:bold; color:${sCol}">${g._score||'-'}</td>
+                    <td style="font-family:monospace; color:var(--info)">${formatTime(g._dur)}</td>
+                    <td>${st}</td>
+                    <td style="color:#888">${g['Completion Date']||g['Added']||'-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            if(list.length > 300) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan="6" style="text-align:center; color:#666; padding:20px;">... ve ${list.length-300} oyun daha</td>`;
+                tbody.appendChild(tr);
+            }
+        };
+
+        const sortUnified = (idx) => {
+            const keys = ['name', 'count'];
+            if(currentSort.col === keys[idx]) currentSort.dir = currentSort.dir==='asc'?'desc':'asc';
+            else { currentSort.col = keys[idx]; currentSort.dir = 'desc'; }
+            renderUnifiedTable();
+        };
+        const sortYears = (idx) => {
+            const keys = ['name', 'count', 'time'];
+            if(currentYearSort.col === keys[idx]) currentYearSort.dir = currentYearSort.dir==='asc'?'desc':'asc';
+            else { currentYearSort.col = keys[idx]; currentYearSort.dir = 'desc'; }
+            renderYearsTable();
+        };
+        const sortGames = (key) => {
+            if(gameListSort.col === key) gameListSort.dir = gameListSort.dir==='asc'?'desc':'asc';
+            else { gameListSort.col = key; gameListSort.dir = 'asc'; }
+            updateDashboard(); // Re-render with sort
+        };
+    </script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        fetch('data.json')
+            .then(response => response.json())
+            .then(data => siteyiGuncelle(data))
+            .catch(error => console.error('Veri çekilirken hata oluştu:', error));
+    });
+
+    function siteyiGuncelle(data) {
+        // 1. Anasayfa Başlığı
+        const anasayfaBaslik = document.getElementById('anasayfa-baslik');
+        if (anasayfaBaslik) anasayfaBaslik.innerText = data.site_ayarlari.anasayfa_yazisi;
+
+        // 2. Mete Karace Profil
+        const meteIsim = document.getElementById('profil-isim');
+        const metePozisyon = document.getElementById('profil-pozisyon');
+        const meteYamalar = document.getElementById('profil-yamalar');
+        
+        const meteVerisi = data.ekip.find(uye => uye.isim === "Mete Karace");
+        if (meteVerisi && meteIsim) {
+            meteIsim.innerText = meteVerisi.isim;
+            metePozisyon.innerText = meteVerisi.pozisyon;
+            if(meteYamalar) {
+                meteYamalar.innerHTML = '';
+                meteVerisi.calistigi_yamalar.forEach(yama => {
+                    let li = document.createElement('li');
+                    li.innerText = yama;
+                    meteYamalar.appendChild(li);
+                });
+            }
+        }
+
+        // 3. Oyunlar Listesi
+        const oyunListesi = document.getElementById('oyun-listesi-kapsayici');
+        if (oyunListesi) {
+            oyunListesi.innerHTML = ''; 
+            data.oyunlar.forEach(oyun => {
+                let oyunKarti = document.createElement('div');
+                oyunKarti.className = 'oyun-karti';
+                oyunKarti.innerHTML = `
+                    <img src="${oyun.kapak_foto}" alt="${oyun.isim} Kapak">
+                    <h3>${oyun.isim}</h3>
+                    <p>Durum: ${oyun.durum} (${oyun.tamamlanma_orani})</p>
+                    <p>Son Güncelleme: ${oyun.son_guncelleme}</p>
+                    <a href="${oyun.indirme_linki}" target="_blank">Yamayı İndir</a>
+                `;
+                oyunListesi.appendChild(oyunKarti);
+            });
+        }
+    }
+</script>
+
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        fetch('data.json')
+            .then(response => response.json())
+            .then(data => siteyiGuncelle(data))
+            .catch(error => console.error('Veri çekilirken hata oluştu:', error));
+    });
+
+    function siteyiGuncelle(data) {
+        // 1. Anasayfa Başlığı
+        const anasayfaBaslik = document.getElementById('anasayfa-baslik');
+        if (anasayfaBaslik) anasayfaBaslik.innerText = data.site_ayarlari.anasayfa_yazisi;
+
+        // 2. Mete Karace Profil
+        const meteIsim = document.getElementById('profil-isim');
+        const metePozisyon = document.getElementById('profil-pozisyon');
+        const meteYamalar = document.getElementById('profil-yamalar');
+        
+        const meteVerisi = data.ekip.find(uye => uye.isim === "Mete Karace");
+        if (meteVerisi && meteIsim) {
+            meteIsim.innerText = meteVerisi.isim;
+            metePozisyon.innerText = meteVerisi.pozisyon;
+            if(meteYamalar) {
+                meteYamalar.innerHTML = '';
+                meteVerisi.calistigi_yamalar.forEach(yama => {
+                    let li = document.createElement('li');
+                    li.innerText = yama;
+                    meteYamalar.appendChild(li);
+                });
+            }
+        }
+
+        // 3. Oyunlar Listesi
+        const oyunListesi = document.getElementById('oyun-listesi-kapsayici');
+        if (oyunListesi) {
+            oyunListesi.innerHTML = ''; 
+            data.oyunlar.forEach(oyun => {
+                let oyunKarti = document.createElement('div');
+                oyunKarti.className = 'oyun-karti';
+                oyunKarti.innerHTML = `
+                    <img src="${oyun.kapak_foto}" alt="${oyun.isim} Kapak">
+                    <h3>${oyun.isim}</h3>
+                    <p>Durum: ${oyun.durum} (${oyun.tamamlanma_orani})</p>
+                    <p>Son Güncelleme: ${oyun.son_guncelleme}</p>
+                    <a href="${oyun.indirme_linki}" target="_blank">Yamayı İndir</a>
+                `;
+                oyunListesi.appendChild(oyunKarti);
+            });
+        }
+    }
+</script>
+
+</body>
+</html>
