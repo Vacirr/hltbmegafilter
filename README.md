@@ -39,4 +39,6 @@ The system automatically detects emulated games by scanning your 'General Notes'
 "MD": "Mega Drive"
 "PC": "PC"
 "DOS": "MS-DOS"
+```
+
 This project was generated using AI tools with minimal manual intervention.
