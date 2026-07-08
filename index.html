@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HLTB Ultimate V19 - Multi Select & Replay</title>
+    <title>HLTB Ultimate - Multi Select & Replay</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -187,7 +187,7 @@
 </head>
 <body>
 
-    <h1><i class="fas fa-chart-line"></i> HLTB Ultimate V19</h1>
+    <h1><i class="fas fa-chart-line"></i> HLTB Ultimate</h1>
 
     <div class="upload-wrapper">
         <div id="dropZone" onclick="document.getElementById('fileInput').click()">
@@ -339,7 +339,7 @@
 
     <script>
         let rawData = [];
-        let activeFilters = { year: null, plat: null, statuses: [], replay: false }; 
+        let activeFilters = { year: [], plat: [], statuses: [], replay: false }; 
         
         let unifiedData = []; 
         let yearsData = [];   
@@ -464,8 +464,12 @@
         };
 
         const toggleFilter = (type, val) => {
-            if(activeFilters[type] === val) activeFilters[type] = null;
-            else activeFilters[type] = val;
+            const idx = activeFilters[type].indexOf(val);
+            if(idx > -1) {
+                activeFilters[type].splice(idx, 1);
+            } else {
+                activeFilters[type].push(val);
+            }
             updateDashboard();
         };
 
@@ -485,15 +489,12 @@
         }
 
         const resetFilters = () => {
-            activeFilters = { year: null, plat: null, statuses: [], replay: false };
+            activeFilters = { year: [], plat: [], statuses: [], replay: false };
             updateDashboard();
         };
 
         const updateDashboard = () => {
-            let filteredData = rawData.filter(g => {
-                let matchYear = activeFilters.year ? g._year === activeFilters.year : true;
-                let matchPlat = activeFilters.plat ? g._plat === activeFilters.plat : true;
-                
+            const matchCommon = (g) => {
                 let matchStatus = true;
                 if (activeFilters.statuses.length > 0) {
                     matchStatus = false;
@@ -502,10 +503,27 @@
                     if(activeFilters.statuses.includes('play') && g['Playing']) matchStatus = true;
                     if(activeFilters.statuses.includes('back') && g['Backlog']) matchStatus = true;
                 }
-                
                 let matchReplay = activeFilters.replay ? g._replay : true;
+                return matchStatus && matchReplay;
+            };
 
-                return matchYear && matchPlat && matchStatus && matchReplay;
+            let filteredData = rawData.filter(g => {
+                let matchYear = activeFilters.year.length > 0 ? activeFilters.year.includes(g._year) : true;
+                let matchPlat = activeFilters.plat.length > 0 ? activeFilters.plat.includes(g._plat) : true;
+                return matchYear && matchPlat && matchCommon(g);
+            });
+
+            // Platform table: apply year/status/replay filters but NOT the plat filter itself,
+            // so every platform stays clickable for multi-select.
+            let dataForPlatTable = rawData.filter(g => {
+                let matchYear = activeFilters.year.length > 0 ? activeFilters.year.includes(g._year) : true;
+                return matchYear && matchCommon(g);
+            });
+
+            // Year table: apply plat/status/replay filters but NOT the year filter itself.
+            let dataForYearTable = rawData.filter(g => {
+                let matchPlat = activeFilters.plat.length > 0 ? activeFilters.plat.includes(g._plat) : true;
+                return matchPlat && matchCommon(g);
             });
 
             const tagContainer = document.getElementById('activeFiltersList');
@@ -528,14 +546,14 @@
             tagContainer.innerHTML = '';
             let hasFilter = false;
 
-            if(activeFilters.year) {
-                tagContainer.innerHTML += `<div class="filter-tag">${activeFilters.year} <i class="fas fa-times" onclick="toggleFilter('year', '${activeFilters.year}')"></i></div>`;
+            activeFilters.year.forEach(y => {
+                tagContainer.innerHTML += `<div class="filter-tag">${y} <i class="fas fa-times" onclick="toggleFilter('year', '${y}')"></i></div>`;
                 hasFilter = true;
-            }
-            if(activeFilters.plat) {
-                tagContainer.innerHTML += `<div class="filter-tag">${activeFilters.plat} <i class="fas fa-times" onclick="toggleFilter('plat', '${activeFilters.plat}')"></i></div>`;
+            });
+            activeFilters.plat.forEach(p => {
+                tagContainer.innerHTML += `<div class="filter-tag">${p} <i class="fas fa-times" onclick="toggleFilter('plat', '${p}')"></i></div>`;
                 hasFilter = true;
-            }
+            });
 
             if(!hasFilter && activeFilters.statuses.length === 0 && !activeFilters.replay) {
                 tagContainer.innerHTML = '<span style="opacity:0.5; font-size:0.9rem;">(Hiçbiri seçili değil)</span>';
@@ -579,13 +597,32 @@
             document.getElementById('kpiTime').innerText = totalHours;
             document.getElementById('kpiTimeDetail').innerText = `${stats.time} Dakika`;
 
-            unifiedData = Object.entries(stats.plats).map(([k,v]) => ({
-                name: k, count: v.count, avgScore: v.sCnt ? v.sSum/v.sCnt : 0
-            }));
+            unifiedData = (() => {
+                let plats = {};
+                dataForPlatTable.forEach(g => {
+                    let p = g._plat;
+                    if(!plats[p]) plats[p] = { count:0, sSum:0, sCnt:0 };
+                    plats[p].count++;
+                    if(g._score>0){ plats[p].sSum+=g._score; plats[p].sCnt++; }
+                });
+                return Object.entries(plats).map(([k,v]) => ({
+                    name: k, count: v.count, avgScore: v.sCnt ? v.sSum/v.sCnt : 0
+                }));
+            })();
             
-            yearsData = Object.entries(stats.years).map(([k,v]) => ({
-                name: k, count: v.count, avgScore: v.sCnt ? v.sSum/v.sCnt : 0, time: v.time
-            }));
+            yearsData = (() => {
+                let years = {};
+                dataForYearTable.forEach(g => {
+                    let y = g._year;
+                    if(!years[y]) years[y] = { count:0, sSum:0, sCnt:0, time:0 };
+                    years[y].count++;
+                    if(g._dur>0) years[y].time += g._dur;
+                    if(g._score>0){ years[y].sSum+=g._score; years[y].sCnt++; }
+                });
+                return Object.entries(years).map(([k,v]) => ({
+                    name: k, count: v.count, avgScore: v.sCnt ? v.sSum/v.sCnt : 0, time: v.time
+                }));
+            })();
 
             renderUnifiedTable();
             renderYearsTable();
@@ -604,7 +641,7 @@
             const maxC = Math.max(...unifiedData.map(d=>d.count))||1;
             unifiedData.forEach(d => {
                 const tr = document.createElement('tr');
-                if(activeFilters.plat === d.name) tr.classList.add('selected-row');
+                if(activeFilters.plat.includes(d.name)) tr.classList.add('selected-row');
                 tr.onclick = () => toggleFilter('plat', d.name);
                 let wC = (d.count/maxC)*100;
                 tr.innerHTML = `
@@ -632,7 +669,7 @@
             const maxC = Math.max(...yearsData.map(d=>d.count))||1;
             yearsData.forEach(d => {
                 const tr = document.createElement('tr');
-                if(activeFilters.year === d.name) tr.classList.add('selected-row');
+                if(activeFilters.year.includes(d.name)) tr.classList.add('selected-row');
                 tr.onclick = () => toggleFilter('year', d.name);
                 let wC = (d.count/maxC)*100;
                 let hrs = Math.floor(d.time/60);
@@ -658,11 +695,11 @@
             destroy('time');
             let timeLabels, countData, durationData, timeTitle;
 
-            if (activeFilters.year) {
+            if (activeFilters.year.length === 1) {
                 timeLabels = TR_MONTHS;
                 countData = stats.months; 
                 durationData = stats.monthsTime.map(m => (m/60).toFixed(1)); 
-                timeTitle = `${activeFilters.year} - Aylık Analiz`;
+                timeTitle = `${activeFilters.year[0]} - Aylık Analiz`;
             } else {
                 timeLabels = Object.keys(stats.years).sort();
                 countData = timeLabels.map(y => stats.years[y].count);
